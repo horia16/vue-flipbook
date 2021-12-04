@@ -1,0 +1,214 @@
+<template>
+  <div
+    ref="container"
+    :key="id"
+    class="flip-container"
+    :class="isOpen ? `opened` : ''"
+    :style="style"
+    :index="index"
+  >
+    <div class="flipper" :class="`structure`">
+      <div
+        style="
+          position: absolute;
+          width: 10px;
+          height: 10px;
+          background: red;
+          z-index: 100;
+          pointer-events: none;
+        "
+        :style="{
+          left: '100%',
+          top: `0`,
+          transform: `translateY(${position.y}px)`,
+        }"
+      >
+        Y {{ position.y }}
+      </div>
+      <div
+        style="
+          position: absolute;
+          width: 10px;
+          height: 10px;
+          background: red;
+          z-index: 100;
+          pointer-events: none;
+        "
+        :style="{ left: 0, top: 0, transform: `translateX(${position.x}px)` }"
+      >
+        X {{ position.x }}
+      </div>
+      <div
+        class="front page page_front"
+        :style="{
+          width: `${bookData.width}px`,
+          height: `${bookData.height}px`,
+          clipPath: `polygon(${
+            (100 / Number(bookData.width)) * position.x
+          }% 0, 100% ${
+            (100 / Number(bookData.height)) * position.y
+          }%, 100% 100%, 0 100%, 0 0)`,
+        }"
+      >
+        <button @click="toggle" style="position: absolute">Flip</button>
+        <slot name="front"></slot>
+      </div>
+      <div
+        class="back page page_back"
+        :style="{
+          top: `${position.y}px`,
+          left: `${position.x}px`,
+          transformOrigin: `left top`,
+          zIndex: 3,
+          clipPath: `polygon(0 0, 0  ${
+            (100 / Number(bookData.height)) *
+            (Number(bookData.width) - position.x)
+          }%, ${(100 / Number(bookData.width)) * position.y}% 0)`,
+          transform: `rotateZ(${-90}deg)`,
+          width: `${bookData.width}px`,
+          height: `${bookData.height}px`,
+        }"
+      >
+        <button @click="toggle" style="position: absolute">Flip</button>
+        <slot name="back"></slot>
+      </div>
+    </div>
+  </div>
+</template>
+<script setup lang="ts">
+import {
+  ref,
+  PropType,
+  computed,
+  inject,
+  reactive,
+  onMounted,
+  onBeforeUnmount,
+} from "vue";
+import useArrayLink from "../../hooks/array-link";
+import injectionKeys from "../../injection-keys";
+// const props = defineProps({
+// });
+const container = ref<HTMLElement | null>(null);
+const containers = inject(injectionKeys.containers, ref([]));
+const bookData = inject(
+  injectionKeys.bookData,
+  computed(() => ({ width: 0, height: 0 }))
+);
+const { id, index } = useArrayLink(containers);
+const zPosition = computed(() => ({
+  open: index.value + 1,
+  closed: containers.value.length + containers.value.length - index.value,
+}));
+const isOpen = ref(false);
+const state = ref<"closed" | "closing" | "open" | "opening">("closed");
+
+function toggle() {
+  if (!isOpen.value) {
+    state.value = "opening";
+    isOpen.value = true;
+    setTimeout(() => {
+      state.value = "open";
+    }, 600);
+  } else {
+    state.value = "closing";
+    isOpen.value = false;
+    setTimeout(() => {
+      state.value = "closed";
+    }, 600);
+  }
+}
+
+const position = reactive({
+  x: 0,
+  y: 0,
+});
+
+function onMouseMove(e: MouseEvent) {
+  if (container.value) {
+    position.x = e.pageX - container.value.offsetLeft;
+    position.y = e.pageY - container.value.offsetTop;
+  }
+  console.log();
+}
+
+function getRotatedPoint(
+  transformedPoint: { x: number; y: number },
+  startPoint: { x: number; y: number },
+  angle: number
+): { x: number; y: number } {
+  return {
+    x:
+      transformedPoint.x * Math.cos(angle) +
+      transformedPoint.y * Math.sin(angle) +
+      startPoint.x,
+    y:
+      transformedPoint.y * Math.cos(angle) -
+      transformedPoint.x * Math.sin(angle) +
+      startPoint.y,
+  };
+}
+
+onMounted(() => {
+  window.addEventListener("mousemove", onMouseMove);
+});
+onBeforeUnmount(() => {
+  window.removeEventListener("mousemove", onMouseMove);
+});
+
+const style = computed<any>(() => ({
+  zIndex:
+    state.value === "opening" || state.value === "closing"
+      ? containers.value.length * 2 + 2
+      : state.value === "closed"
+      ? zPosition.value.closed
+      : zPosition.value.open,
+  width: `${bookData.value.width}px`,
+  height: `${bookData.value.height}px`,
+}));
+</script>
+<style>
+.flip-container {
+  position: absolute;
+  perspective: 1000px;
+  transform-style: preserve-3d;
+}
+.opened .flipper {
+  transform: rotateY(-180deg);
+  transform-origin: left center;
+}
+.structure {
+  transform-origin: left center;
+}
+.flip-container,
+.front,
+.back {
+  width: 320px;
+  height: 480px;
+  border-radius: 4px;
+}
+.flipper {
+  transition: 0.6s;
+  transform-style: preserve-3d;
+  position: relative;
+}
+.front,
+.back {
+  backface-visibility: hidden;
+  position: absolute;
+  top: 0;
+  left: 0;
+}
+.front {
+  z-index: 2;
+  transform: rotateY(0deg);
+  box-shadow: 6px 0 6px -2px rgba(0, 0, 0, 0.3) inset;
+}
+.back {
+  /* transform: rotateY(180deg); */
+  box-shadow: -6px 0 6px -2px rgba(0, 0, 0, 0.3) inset;
+}
+.page {
+  background: white;
+}
+</style>
